@@ -619,12 +619,18 @@ static int cam_stream_config(struct i2c_client *client, struct cam *priv,
         }
 
         if ((cmd_status != MCU_CMD_STATUS_SUCCESS) ||
-            (retcode != ERRCODE_SUCCESS)) {
+            (retcode == ERRCODE_BUSY)) {
                 dev_err(&client->dev," ISP is Unintialized or Busy STATUS = 0x%04x Errcode = 0x%02x !! \n",
                      cmd_status, retcode);
                 ret = -EBUSY;
                 goto exit;
         }
+        /* A failed previous STREAM_CONFIG leaves its error latched in the MCU
+         * status register; treating it as fatal bricks every later attempt.
+         * Only BUSY means the ISP can't take a new config now. */
+        if (retcode != ERRCODE_SUCCESS)
+                dev_warn(&client->dev, "stream_config: stale MCU retcode 0x%02x, sending fresh config\n",
+                     retcode);
 
         /* call ISP Stream config command */
         for (loop = 0; (&priv->streamdb[loop])!= NULL; loop++) {
@@ -677,6 +683,10 @@ static int cam_stream_config(struct i2c_client *client, struct cam *priv,
         mc_data[15] = 0x01;
 
         mc_data[16] = errorcheck(&mc_data[2], 14);
+        dev_info(&client->dev, "stream_config: idx=%u fmt=0x%08x %ux%u@%u (mode=%d fidx=%d)\n",
+                 index, format, priv->cam_frmfmt[mode].size.width,
+                 priv->cam_frmfmt[mode].size.height,
+                 priv->cam_frmfmt[mode].framerates[frate_index], mode, frate_index);
         err = cam_write(client, mc_data, 17);
         if (err != 0) {
                 dev_err(&client->dev," %s(%d) MCU Stream Config Error - %d \n", __func__,
