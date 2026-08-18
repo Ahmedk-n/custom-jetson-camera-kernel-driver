@@ -326,6 +326,26 @@ static int cam_set_mode(struct tegracam_device *tc_dev)
 		break;
 	}
 
+	/* numfrmfmts is registered as the MCU's total stream count, but only the
+	 * Bayer streams fill cam_frmfmt[] - the framework can hand us an index
+	 * pointing at an empty (all-zero) entry, and the MCU then correctly
+	 * rejects a 0x0@0 stream config with ERRCODE_RANGE. Validate here and
+	 * recover by matching the requested resolution. */
+	if (s_data->mode_prop_idx < 0 ||
+	    priv->cam_frmfmt[s_data->mode_prop_idx].size.width == 0) {
+		int fixed = 0, i;
+		for (i = 0; priv->cam_frmfmt[i].size.width != 0; i++) {
+			if (priv->cam_frmfmt[i].size.width == s_data->fmt_width &&
+			    priv->cam_frmfmt[i].size.height == s_data->fmt_height) {
+				fixed = i;
+				break;
+			}
+		}
+		dev_warn(dev, "set_mode: mode_prop_idx %d has no stream, using mode %d for %dx%d\n",
+			 s_data->mode_prop_idx, fixed, s_data->fmt_width, s_data->fmt_height);
+		s_data->mode_prop_idx = fixed;
+	}
+
 	while (retry-- > 0 ) {
 		if((err = cam_set_ctrl(priv->i2c_client, priv, TEGRA_CAMERA_CID_SENSOR_MODE_ID,
 					CTRL_STANDARD, (int64_t)s_data->mode_prop_idx)) < 0)
@@ -992,6 +1012,17 @@ static int cam_list_fmts(struct i2c_client *client, struct cam *priv,
 
 					continue;
 			}
+			dev_info(&client->dev,
+				"MCU stream[%u]: fourcc=%c%c%c%c %ux%u rate_type=%u num=%u denom=%u\n",
+				index,
+				(stream_info->fmt_fourcc >> 24) & 0xff,
+				(stream_info->fmt_fourcc >> 16) & 0xff,
+				(stream_info->fmt_fourcc >> 8) & 0xff,
+				stream_info->fmt_fourcc & 0xff,
+				stream_info->width, stream_info->height,
+				stream_info->frame_rate_type,
+				stream_info->frame_rate.disc.frame_rate_num,
+				stream_info->frame_rate.disc.frame_rate_denom);
 			switch (stream_info->fmt_fourcc){
 				case V4L2_PIX_FMT_SRGGB12:
 				priv->cam_frmfmt[mode].size.width = stream_info->width;
