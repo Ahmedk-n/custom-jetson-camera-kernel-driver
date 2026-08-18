@@ -73,7 +73,24 @@ it.
 | Sensor probe, firmware verify, controls | ✅ |
 | Streaming (2560×1920, 10-bit Bayer GRBG) | ✅ |
 | Full pipeline (debayer → YOLO TensorRT on-device) | ✅ ~2.3 inferences/s |
-| Full frame rate (30–60 fps) | ⏳ camera firmware caps raw taps at 2.5 fps; needs the vendor's Argus path, which awaits their JetPack 7 release |
+| Full frame rate (30–60 fps) | 🔧 fix identified, awaiting on-hardware validation — see below |
+
+### The frame-rate fix (in test)
+
+Streams currently run at the camera's 2.5 fps floor. Root cause analysis:
+the camera MCU honors a frame-rate command **only in the pre-stream
+window**, and JetPack 7's tegracam skips programming sensor controls in
+that window whenever the driver reports its power state as off — which
+this driver's stub power functions do. So the frame-rate write lands
+mid-stream, where the MCU accepts-but-ignores it (verified: control ACKed,
+exposure responds live, frame period stays exactly 400 ms). e-con's own
+JetPack 6 release patches this exact check out of NVIDIA's stack
+(`CONFIG_VIDEO_ECAM` in their oot patch), confirming the mechanism.
+
+Our fix stays driver-side: report the true power state (the module is
+permanently powered — there is no rail control in this design), so the
+pre-stream control programming runs and the frame rate reaches the MCU in
+its window. Validation on hardware pending.
 
 ## License & credit
 
