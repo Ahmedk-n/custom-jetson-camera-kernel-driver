@@ -184,7 +184,13 @@ static int cam_power_off(struct camera_common_data *s_data)
 {
 	struct camera_common_power_rail *pw = s_data->power;
 
-	pw->state = SWITCH_OFF;
+	/* The module is permanently powered (no rail control in this design),
+	 * but reporting SWITCH_OFF makes tegracam skip programming controls in
+	 * the pre-stream window — the only moment the camera MCU honors a
+	 * frame-rate change. JetPack 6 works around this by patching tegracam
+	 * itself (CONFIG_VIDEO_ECAM); reporting the true power state fixes it
+	 * from the driver side without touching NVIDIA's stack. */
+	pw->state = SWITCH_ON;
 
 	return 0;
 }
@@ -327,7 +333,7 @@ static int cam_set_mode(struct tegracam_device *tc_dev)
 	}
 
 	/* numfrmfmts is registered as the MCU's total stream count, but only the
-	 * Bayer streams fill cam_frmfmt[] - the framework can hand us an index
+	 * Bayer streams fill cam_frmfmt[] — the framework can hand us an index
 	 * pointing at an empty (all-zero) entry, and the MCU then correctly
 	 * rejects a 0x0@0 stream config with ERRCODE_RANGE. Validate here and
 	 * recover by matching the requested resolution. */
@@ -511,6 +517,8 @@ static int cam_set_framerate(struct tegracam_device *tc_dev, s64 val)
         if(mode->control_properties.min_framerate == mode->control_properties.max_framerate)
                 return 0;
 
+	dev_info(dev, "set_framerate: sending %llu to MCU (mode %d)\n",
+		 (unsigned long long)data, s_data->mode);
 	while (--retry > 0) {
 		if ((err = cam_set_ctrl(tc_dev->client, priv, TEGRA_CAMERA_CID_FRAME_RATE, CTRL_EXTENDED, data)) < 0) {
 		   	dev_err(dev, "%s[%d] Fail! retrying\n",__func__,__LINE__);
