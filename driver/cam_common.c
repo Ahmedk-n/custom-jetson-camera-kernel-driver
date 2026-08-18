@@ -21,6 +21,7 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/gpio.h>
+#include <linux/gpio/consumer.h>
 #include <linux/module.h>
 
 #include <linux/seq_file.h>
@@ -274,7 +275,7 @@ static int cam_power_get(struct tegracam_device *tc_dev)
 
 static void gpio_set_output_value(unsigned int gpio, int val)
 {
-    if (gpio_cansleep(gpio)) {
+    if (gpiod_cansleep(gpio_to_desc(gpio))) {
 	gpio_direction_output(gpio,val);
 	gpio_set_value_cansleep(gpio, val);
     } else {
@@ -2754,9 +2755,9 @@ static int cam_board_setup(struct cam *priv)
 
 
 
-static int cam_probe(struct i2c_client *client,
-			const struct i2c_device_id *id)
+static int cam_probe(struct i2c_client *client)
 {
+	const struct i2c_device_id *id = i2c_client_get_device_id(client);
 	struct device_node *node = client->dev.of_node;
 	struct tegracam_device *tc_dev;
 	struct cam *priv;
@@ -2845,7 +2846,7 @@ static int cam_probe(struct i2c_client *client,
 	return 0;
 }
 
-static int
+static void
 cam_remove(struct i2c_client *client)
 {
 	struct camera_common_data *s_data = to_camera_common_data(&client->dev);
@@ -2870,7 +2871,6 @@ cam_remove(struct i2c_client *client)
 //	gpio_free(priv->reset_gpio);
 //	gpio_free(priv->boot_gpio);
 //	gpio_free(priv->flash_gpio);
-	return 0;
 }
 
 static const struct i2c_device_id cam_id[] = {
