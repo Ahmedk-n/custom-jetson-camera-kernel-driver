@@ -1,0 +1,7 @@
+GPL-2.0
+
+This repository contains and extends GPL-2.0 kernel driver code.
+Original driver: Copyright (c) e-con Systems India Pvt. Ltd.
+Port, fixes and device-tree work: Copyright (c) 2026 ASCENT team (KFUPM).
+See the license header in driver/cam_common.c and
+https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
